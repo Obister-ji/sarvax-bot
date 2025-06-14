@@ -589,4 +589,4 @@ async def check_reminders():
 async def on_guild_join(guild):
     await bot.tree.sync(guild=guild)
 
-bot.run("DISCORD_BOT_TOKEN")
+bot.run(DISCORD_BOT_TOKEN)
