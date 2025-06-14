@@ -16,7 +16,6 @@ intents.members = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
-tree = app_commands.CommandTree(bot)
 
 # Database simulation (replace with real DB in production)
 TICKETS_DB = {}
@@ -104,12 +103,11 @@ class Ticket:
             )
         
         embed.set_footer(text=f"Created at • Ticket ID: {self.id}")
-        embed.set_thumbnail(url="https://i.imgur.com/7W6mEfK.png")  # Premium thumbnail
+        embed.set_thumbnail(url="https://i.imgur.com/7W6mEfK.png")
         
         return embed
 
 class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
-    """Premium ticket creation form with animated UI"""
     task_title = ui.TextInput(
         label="Task Title", 
         placeholder="e.g., Fix dashboard UI bugs",
@@ -152,29 +150,23 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
             max_values=1
         )
         
-        # Add premium UI components
         self.add_item(self.category_select)
         self.add_item(self.assignee_select)
         self.add_item(self.priority_select)
     
     async def on_submit(self, interaction: discord.Interaction):
-        """Handle form submission with premium effects"""
         global TICKET_COUNTER
         
-        # Create loading effect
         await interaction.response.defer(ephemeral=True, thinking=True)
         
-        # Process inputs
         assignee_id = int(self.assignee_select.values[0])
         priority = self.priority_select.values[0]
         category = self.category_select.values[0]
         assignee = interaction.guild.get_member(assignee_id)
         
-        # Generate ticket ID with counter
         TICKET_COUNTER += 1
         ticket_id = TICKET_COUNTER
         
-        # Create ticket
         ticket = Ticket(
             ticket_id=ticket_id,
             creator=interaction.user,
@@ -186,24 +178,19 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
             category=category
         )
         
-        # Store ticket
         TICKETS_DB[ticket_id] = ticket
         
-        # Create premium embed
         embed = ticket.to_embed()
         embed.set_author(name="New Ticket Created!", icon_url=interaction.user.avatar.url)
         
-        # Create interactive buttons
         view = TicketActionsView(ticket_id)
         
-        # Send with premium effects
         await interaction.followup.send(
             content=f"🎉 Ticket #{ticket_id} created successfully!",
             embed=embed,
             view=view
         )
         
-        # Send DM notification with premium styling
         try:
             dm_embed = discord.Embed(
                 title=f"📬 New Ticket Assigned: #{ticket_id}",
@@ -213,7 +200,7 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
             dm_embed.add_field(name="Title", value=ticket.title, inline=False)
             dm_embed.add_field(name="Priority", value=f"{priority}", inline=True)
             dm_embed.add_field(name="Deadline", value=f"`{ticket.deadline}`", inline=True)
-            dm_embed.set_thumbnail(url="https://i.imgur.com/J5h8x2V.png")  # Premium notification icon
+            dm_embed.set_thumbnail(url="https://i.imgur.com/J5h8x2V.png")
             dm_embed.set_footer(text="Please respond promptly to this ticket")
             
             await assignee.send(embed=dm_embed)
@@ -221,7 +208,6 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
             pass
 
 class TicketActionsView(ui.View):
-    """Premium interactive buttons for ticket actions"""
     def __init__(self, ticket_id: int):
         super().__init__(timeout=None)
         self.ticket_id = ticket_id
@@ -260,7 +246,6 @@ class TicketActionsView(ui.View):
         )
 
 class CommentModal(ui.Modal, title="💬 Add Comment"):
-    """Premium comment modal with rich text support"""
     comment = ui.TextInput(
         label="Your Comment", 
         style=discord.TextStyle.long,
@@ -284,14 +269,12 @@ class CommentModal(ui.Modal, title="💬 Add Comment"):
             "timestamp": datetime.now()
         })
         
-        # Premium confirmation
         embed = discord.Embed(
             description=f"💬 Comment added to ticket #{self.ticket_id}",
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        # Update ticket embed
         channel = interaction.channel
         try:
             message = await channel.fetch_message(interaction.message.id)
@@ -300,7 +283,6 @@ class CommentModal(ui.Modal, title="💬 Add Comment"):
             pass
 
 class ReminderModal(ui.Modal, title="⏰ Set Reminder"):
-    """Premium reminder modal with date picker simulation"""
     when = ui.TextInput(
         label="Reminder Time (DD/MM/YYYY HH:MM)", 
         placeholder="e.g., 30/06/2023 14:30",
@@ -329,7 +311,6 @@ class ReminderModal(ui.Modal, title="⏰ Set Reminder"):
                 "note": str(self.note) if self.note else None
             })
             
-            # Premium confirmation
             embed = discord.Embed(
                 description=f"⏰ Reminder set for {reminder_time.strftime('%d %b %Y at %H:%M')}",
                 color=discord.Color.gold()
@@ -343,13 +324,11 @@ class ReminderModal(ui.Modal, title="⏰ Set Reminder"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class TransferView(ui.View):
-    """Premium transfer interface with animated select menu"""
     def __init__(self, ticket_id: int, current_assignee: discord.Member):
         super().__init__(timeout=120)
         self.ticket_id = ticket_id
         self.current_assignee = current_assignee
         
-        # Premium member select dropdown
         members = [
             m for m in current_assignee.guild.members 
             if not m.bot and m.id != current_assignee.id
@@ -388,14 +367,12 @@ class TransferView(ui.View):
         old_assignee = ticket.assignee
         ticket.assignee = new_assignee
         
-        # Premium transfer notification
         embed = discord.Embed(
             description=f"🔄 Ticket #{self.ticket_id} transferred to {new_assignee.mention}",
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed)
         
-        # DM notifications with premium styling
         try:
             new_assignee_embed = discord.Embed(
                 title=f"📬 Ticket Assigned: #{self.ticket_id}",
@@ -426,10 +403,8 @@ class TransferView(ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         self.stop()
 
-# Premium slash commands
-@tree.command(name="new", description="✨ Create a new premium support ticket")
+@bot.tree.command(name="new", description="✨ Create a new premium support ticket")
 async def create_ticket(interaction: discord.Interaction):
-    """Premium ticket creation command with animated response"""
     await interaction.response.defer(ephemeral=True, thinking=True)
     
     members = [m for m in interaction.guild.members if not m.bot]
@@ -441,20 +416,31 @@ async def create_ticket(interaction: discord.Interaction):
         await interaction.followup.send(embed=embed)
         return
     
-    # Premium loading message
     embed = discord.Embed(
         description="✨ Preparing your premium ticket form...",
         color=discord.Color.gold()
     )
     await interaction.followup.send(embed=embed, ephemeral=True)
     
-    # Show the premium modal
     await interaction.followup.send_modal(TicketModal(members))
 
-@tree.command(name="ticket", description="🔍 View a specific ticket")
-@app_commands.autocomplete(ticket_id=autocomplete_ticket)
+async def ticket_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
+    tickets = []
+    for ticket in TICKETS_DB.values():
+        if interaction.user.id in [ticket.assignee.id, ticket.creator.id]:
+            if current.lower() in str(ticket.id) or current.lower() in ticket.title.lower():
+                emoji = STATUS_EMOJIS.get(ticket.status, "📌")
+                tickets.append(
+                    app_commands.Choice(
+                        name=f"#{ticket.id} {emoji} {ticket.title[:50]}",
+                        value=ticket.id
+                    )
+                )
+    return tickets[:25]
+
+@bot.tree.command(name="ticket", description="🔍 View a specific ticket")
+@app_commands.autocomplete(ticket_id=ticket_autocomplete)
 async def view_ticket(interaction: discord.Interaction, ticket_id: int):
-    """Premium ticket viewing command"""
     ticket = TICKETS_DB.get(ticket_id)
     
     if not ticket:
@@ -473,29 +459,12 @@ async def view_ticket(interaction: discord.Interaction, ticket_id: int):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
-    # Premium ticket display
     embed = ticket.to_embed()
     view = TicketActionsView(ticket_id)
     await interaction.response.send_message(embed=embed, view=view)
 
-async def autocomplete_ticket(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
-    """Premium autocomplete for tickets"""
-    tickets = []
-    for ticket in TICKETS_DB.values():
-        if interaction.user.id in [ticket.assignee.id, ticket.creator.id]:
-            if current.lower() in str(ticket.id) or current.lower() in ticket.title.lower():
-                emoji = STATUS_EMOJIS.get(ticket.status, "📌")
-                tickets.append(
-                    app_commands.Choice(
-                        name=f"#{ticket.id} {emoji} {ticket.title[:50]}",
-                        value=ticket.id
-                    )
-                )
-    return tickets[:25]
-
-@tree.command(name="mytickets", description="📋 View all your assigned tickets")
+@bot.tree.command(name="mytickets", description="📋 View all your assigned tickets")
 async def my_tickets(interaction: discord.Interaction):
-    """Premium ticket listing command"""
     user_tickets = [
         t for t in TICKETS_DB.values() 
         if t.assignee.id == interaction.user.id or t.creator.id == interaction.user.id
@@ -509,9 +478,8 @@ async def my_tickets(interaction: discord.Interaction):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
-    # Premium paginated ticket list
     embeds = []
-    for i, ticket in enumerate(user_tickets[:10], 1):  # Limit to 10 tickets
+    for i, ticket in enumerate(user_tickets[:10], 1):
         embed = discord.Embed(
             title=f"📋 Your Tickets ({i}/{len(user_tickets[:10])})",
             color=discord.Color.blurple()
@@ -525,9 +493,8 @@ async def my_tickets(interaction: discord.Interaction):
     
     await interaction.response.send_message(embeds=embeds, ephemeral=True)
 
-@tree.command(name="help", description="ℹ️ Show premium bot help")
+@bot.tree.command(name="help", description="ℹ️ Show premium bot help")
 async def help_command(interaction: discord.Interaction):
-    """Premium help command with animated embed"""
     embed = discord.Embed(
         title="✨ Premium Ticket Bot Help",
         description="Manage support tickets with style!",
@@ -559,14 +526,11 @@ async def help_command(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed)
 
-# Premium bot events
 @bot.event
 async def on_ready():
-    """Premium startup event with rich presence"""
-    await tree.sync()
+    await bot.tree.sync()
     print(f"✨ Premium bot ready as {bot.user}")
     
-    # Set premium status
     activity = discord.Activity(
         type=discord.ActivityType.watching,
         name="premium tickets"
@@ -575,11 +539,9 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Handle file attachments for tickets"""
     if message.author.bot or not message.attachments:
         return
     
-    # Check if this is a reply to a ticket message
     if message.reference:
         try:
             replied_message = await message.channel.fetch_message(message.reference.message_id)
@@ -589,17 +551,42 @@ async def on_message(message: discord.Message):
                 if ticket:
                     ticket.attachments.extend([a.url for a in message.attachments])
                     
-                    # Premium confirmation
                     embed = discord.Embed(
                         description=f"📎 Added {len(message.attachments)} attachment(s) to ticket #{ticket_id}",
                         color=discord.Color.green()
                     )
                     await message.reply(embed=embed, delete_after=5)
                     
-                    # Update the original ticket embed
                     await replied_message.edit(embed=ticket.to_embed())
         except:
             pass
 
-# Start the premium bot
+@tasks.loop(minutes=30)
+async def check_reminders():
+    now = datetime.now()
+    for reminder in REMINDERS[:]:
+        if now >= reminder["time"]:
+            ticket = TICKETS_DB.get(reminder["ticket_id"])
+            if ticket:
+                user = bot.get_user(reminder["user_id"])
+                if user:
+                    embed = discord.Embed(
+                        title=f"⏰ Reminder: Ticket #{ticket.id}",
+                        description=f"**{ticket.title}**\n\n{reminder.get('note', 'No additional notes')}",
+                        color=discord.Color.gold()
+                    )
+                    embed.add_field(name="Status", value=ticket.status, inline=True)
+                    embed.add_field(name="Priority", value=ticket.priority, inline=True)
+                    embed.add_field(name="Deadline", value=ticket.deadline, inline=True)
+                    
+                    try:
+                        await user.send(embed=embed)
+                        REMINDERS.remove(reminder)
+                    except:
+                        pass
+
+@bot.event
+async def on_guild_join(guild):
+    await bot.tree.sync(guild=guild)
+
 bot.run("DISCORD_BOT_TOKEN")
