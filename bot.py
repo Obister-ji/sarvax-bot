@@ -602,4 +602,4 @@ async def on_message(message: discord.Message):
             pass
 
 # Start the premium bot
-bot.run(DISCORD_BOT_TOKEN)
+bot.run("DISCORD_BOT_TOKEN")
