@@ -20,7 +20,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 # Database simulation (replace with real DB in production)
 TICKETS_DB = {}
 REMINDERS = []
-CUSTOM_FIELDS = {}
+WORK_HOURS = {}  # Format: {user_id: {"date": {"start": time, "end": time, "tasks": []}}}
 TICKET_COUNTER = 0
 
 # Premium UI Constants
@@ -157,8 +157,6 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
     async def on_submit(self, interaction: discord.Interaction):
         global TICKET_COUNTER
         
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        
         assignee_id = int(self.assignee_select.values[0])
         priority = self.priority_select.values[0]
         category = self.category_select.values[0]
@@ -185,7 +183,7 @@ class TicketModal(ui.Modal, title="✨ Create Premium Ticket"):
         
         view = TicketActionsView(ticket_id)
         
-        await interaction.followup.send(
+        await interaction.response.send_message(
             content=f"🎉 Ticket #{ticket_id} created successfully!",
             embed=embed,
             view=view
@@ -403,26 +401,91 @@ class TransferView(ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
         self.stop()
 
+class WorkHoursModal(ui.Modal, title="⏱️ Log Work Hours"):
+    date = ui.TextInput(
+        label="Date (DD/MM/YYYY)", 
+        placeholder="e.g., 14/06/2025",
+        style=discord.TextStyle.short,
+        required=True
+    )
+    start_time = ui.TextInput(
+        label="Start Time (HH:MM)", 
+        placeholder="e.g., 09:00",
+        style=discord.TextStyle.short,
+        required=True
+    )
+    end_time = ui.TextInput(
+        label="End Time (HH:MM)", 
+        placeholder="e.g., 17:30",
+        style=discord.TextStyle.short,
+        required=True
+    )
+    tasks = ui.TextInput(
+        label="Tasks Completed", 
+        placeholder="Describe what you worked on...",
+        style=discord.TextStyle.long,
+        required=False
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Validate date and times
+            work_date = datetime.strptime(str(self.date), "%d/%m/%Y").date()
+            start = datetime.strptime(str(self.start_time), "%H:%M").time()
+            end = datetime.strptime(str(self.end_time), "%H:%M").time()
+            
+            if end <= start:
+                raise ValueError("End time must be after start time")
+            
+            # Calculate hours worked
+            start_dt = datetime.combine(work_date, start)
+            end_dt = datetime.combine(work_date, end)
+            hours_worked = round((end_dt - start_dt).total_seconds() / 3600, 2)
+            
+            # Store work hours
+            user_id = str(interaction.user.id)
+            if user_id not in WORK_HOURS:
+                WORK_HOURS[user_id] = {}
+                
+            date_str = work_date.strftime("%Y-%m-%d")
+            WORK_HOURS[user_id][date_str] = {
+                "start": str(self.start_time),
+                "end": str(self.end_time),
+                "hours": hours_worked,
+                "tasks": str(self.tasks) if self.tasks else "No details provided"
+            }
+            
+            embed = discord.Embed(
+                title="⏱️ Work Hours Logged",
+                description=f"Successfully recorded your work hours for {work_date.strftime('%d %b %Y')}",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Start Time", value=str(self.start_time), inline=True)
+            embed.add_field(name="End Time", value=str(self.end_time), inline=True)
+            embed.add_field(name="Total Hours", value=f"{hours_worked} hours", inline=True)
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            
+        except ValueError as e:
+            embed = discord.Embed(
+                title="❌ Error Logging Hours",
+                description=str(e),
+                color=discord.Color.red()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="new", description="✨ Create a new premium support ticket")
 async def create_ticket(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True, thinking=True)
-    
     members = [m for m in interaction.guild.members if not m.bot]
     if not members:
         embed = discord.Embed(
             description="❌ No team members available for assignment",
             color=discord.Color.red()
         )
-        await interaction.followup.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
-    embed = discord.Embed(
-        description="✨ Preparing your premium ticket form...",
-        color=discord.Color.gold()
-    )
-    await interaction.followup.send(embed=embed, ephemeral=True)
-    
-    await interaction.followup.send_modal(TicketModal(members))
+    await interaction.response.send_modal(TicketModal(members))
 
 async def ticket_autocomplete(interaction: discord.Interaction, current: str) -> List[app_commands.Choice[int]]:
     tickets = []
@@ -493,11 +556,44 @@ async def my_tickets(interaction: discord.Interaction):
     
     await interaction.response.send_message(embeds=embeds, ephemeral=True)
 
+@bot.tree.command(name="loghours", description="⏱️ Log your work hours")
+async def log_hours(interaction: discord.Interaction):
+    await interaction.response.send_modal(WorkHoursModal())
+
+@bot.tree.command(name="workreport", description="📊 Show your work hours report")
+async def work_report(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    if user_id not in WORK_HOURS or not WORK_HOURS[user_id]:
+        embed = discord.Embed(
+            description="📭 You have no logged work hours",
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    total_hours = 0
+    embed = discord.Embed(
+        title=f"⏱️ Work Report for {interaction.user.display_name}",
+        color=discord.Color.gold()
+    )
+    
+    for date, entry in WORK_HOURS[user_id].items():
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+        embed.add_field(
+            name=f"📅 {date_obj.strftime('%d %b %Y')}",
+            value=f"⏰ {entry['start']} - {entry['end']} ({entry['hours']} hrs)\n📝 {entry['tasks']}",
+            inline=False
+        )
+        total_hours += entry['hours']
+    
+    embed.set_footer(text=f"Total Hours: {total_hours}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="help", description="ℹ️ Show premium bot help")
 async def help_command(interaction: discord.Interaction):
     embed = discord.Embed(
         title="✨ Premium Ticket Bot Help",
-        description="Manage support tickets with style!",
+        description="Manage support tickets and work hours with style!",
         color=discord.Color.purple()
     )
     
@@ -505,18 +601,23 @@ async def help_command(interaction: discord.Interaction):
         name="🎫 Ticket Commands",
         value="""`/new` - Create a new ticket
 `/ticket` - View a specific ticket
-`/mytickets` - List your tickets
-`/help` - Show this help""",
+`/mytickets` - List your tickets""",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⏱️ Work Hours Commands",
+        value="""`/loghours` - Log your work hours
+`/workreport` - Show your work hours report""",
         inline=False
     )
     
     embed.add_field(
         name="💎 Premium Features",
-        value="""• Beautiful animated embeds
-• Priority levels with custom emojis
+        value="""• Beautiful ticket management
+• Work hour tracking
+• Reminders and notifications
 • File attachments
-• Reminders
-• Ticket transfers
 • And more!""",
         inline=False
     )
@@ -533,9 +634,10 @@ async def on_ready():
     
     activity = discord.Activity(
         type=discord.ActivityType.watching,
-        name="premium tickets"
+        name="premium tickets and work hours"
     )
     await bot.change_presence(activity=activity)
+    check_reminders.start()
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -584,9 +686,5 @@ async def check_reminders():
                         REMINDERS.remove(reminder)
                     except:
                         pass
-
-@bot.event
-async def on_guild_join(guild):
-    await bot.tree.sync(guild=guild)
 
 bot.run(DISCORD_BOT_TOKEN)
