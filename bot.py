@@ -1,115 +1,119 @@
-import os
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands, Interaction, Embed, ButtonStyle
-from discord.ui import Modal, TextInput, View, Button
-import sqlite3
-from datetime import datetime
+from discord import app_commands, ui
+import asyncio
+import datetime
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.guilds = True
 intents.members = True
-intents.voice_states = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Set your token in environment variable
+GUILD_ID = YOUR_GUILD_ID  # Replace with your server ID
+LOG_CHANNEL_ID = YOUR_LOG_CHANNEL_ID  # Replace with your log channel ID
 
-# Connect to SQLite
-conn = sqlite3.connect('sarvax.db')
-c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS work_sessions (
-                user_id INTEGER,
-                start_time TEXT,
-                end_time TEXT
-            )''')
-c.execute('''CREATE TABLE IF NOT EXISTS tickets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                heading TEXT,
-                description TEXT,
-                deadline TEXT,
-                assignee TEXT,
-                priority TEXT,
-                timestamp TEXT
-            )''')
-conn.commit()
+class TicketModal(ui.Modal, title="🔧 Create Work Ticket"):
+    title = ui.TextInput(label="Task Title", placeholder="Enter task title", max_length=100)
+    description = ui.TextInput(label="Description", style=discord.TextStyle.paragraph, placeholder="Enter details")
+    deadline = ui.TextInput(label="Deadline (YYYY-MM-DD HH:MM)", placeholder="2025-06-20 15:30")
 
-voice_start_times = {}
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Select assignee, priority and tags:", ephemeral=True, view=TicketOptionsView(self.title.value, self.description.value, self.deadline.value, interaction.user))
 
-class WorkTicketModal(Modal, title="Raise a Work Ticket"):
-    heading = TextInput(label="Task Heading", required=True)
-    description = TextInput(label="Description", style=discord.TextStyle.paragraph, required=True)
-    deadline = TextInput(label="Deadline (YYYY-MM-DD)", required=True)
-    assignee = TextInput(label="Assignee (mention @user)", required=True)
-    priority = TextInput(label="Priority (High/Medium/Low)", required=True)
-
-    async def on_submit(self, interaction: Interaction):
-        embed = Embed(title="📌 Work Ticket Raised!", color=0xffa500)
-        embed.add_field(name="📝 Heading", value=self.heading.value, inline=False)
-        embed.add_field(name="📄 Description", value=self.description.value, inline=False)
-        embed.add_field(name="📅 Deadline", value=self.deadline.value, inline=True)
-        embed.add_field(name="👤 Assignee", value=self.assignee.value, inline=True)
-        embed.add_field(name="🚦 Priority", value=self.priority.value, inline=True)
-        embed.set_footer(text=f"Raised by {interaction.user.display_name}")
-
-        thread = await interaction.channel.create_thread(name=f"Ticket - {self.heading.value}", type=discord.ChannelType.public_thread)
-        await thread.send(embed=embed, view=TicketActions())
-
-        with conn:
-            conn.execute("INSERT INTO tickets (user_id, heading, description, deadline, assignee, priority, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                         (interaction.user.id, self.heading.value, self.description.value, self.deadline.value, self.assignee.value, self.priority.value, datetime.now().isoformat()))
-
-        await interaction.response.send_message("✅ Ticket raised successfully! Check the new thread.", ephemeral=True)
-
-class TicketActions(View):
-    def __init__(self):
+class TicketOptionsView(ui.View):
+    def __init__(self, title, description, deadline, creator):
         super().__init__(timeout=None)
-        self.add_item(Button(label="✅ Complete", style=ButtonStyle.success, custom_id="complete_ticket"))
-        self.add_item(Button(label="❌ Cancel", style=ButtonStyle.danger, custom_id="cancel_ticket"))
+        self.title = title
+        self.description = description
+        self.deadline = deadline
+        self.creator = creator
 
-@bot.event
-async def on_ready():
-    await tree.sync()
-    print(f"Bot is online as {bot.user}!")
+        self.assignee_select = ui.UserSelect(placeholder="👨‍💼 Select assignee(s)", max_values=3)
+        self.priority_select = ui.Select(placeholder="🔴 Select priority", options=[
+            discord.SelectOption(label="High", emoji="🔴", value="high"),
+            discord.SelectOption(label="Medium", emoji="🟡", value="medium"),
+            discord.SelectOption(label="Low", emoji="🟢", value="low")
+        ])
+        self.tag_input = ui.TextInput(label="Tags", placeholder="#urgent #design", required=False)
 
-@tree.command(name="workticket", description="Raise a new work ticket")
-async def workticket(interaction: Interaction):
-    await interaction.response.send_modal(WorkTicketModal())
+        self.add_item(self.assignee_select)
+        self.add_item(self.priority_select)
+        self.add_item(ui.Button(label="Submit", style=discord.ButtonStyle.success, custom_id="submit_ticket"))
 
-@tree.command(name="workreport", description="Get your work report")
-@app_commands.describe(scope="Choose daily or weekly report")
-@app_commands.choices(scope=[app_commands.Choice(name="daily", value="daily"), app_commands.Choice(name="weekly", value="weekly")])
-async def workreport(interaction: Interaction, scope: app_commands.Choice[str]):
-    user_id = interaction.user.id
-    with conn:
-        rows = conn.execute("SELECT start_time, end_time FROM work_sessions WHERE user_id = ?", (user_id,)).fetchall()
-    total_seconds = 0
-    for start, end in rows:
-        if end:
-            start_time = datetime.fromisoformat(start)
-            end_time = datetime.fromisoformat(end)
-            total_seconds += (end_time - start_time).total_seconds()
-    hours = total_seconds / 3600
-    await interaction.response.send_message(f"🕒 You worked {hours:.2f} hours in total ({scope.name}).")
+    @ui.button(label="Submit", style=discord.ButtonStyle.green)
+    async def submit(self, interaction: discord.Interaction, button: ui.Button):
+        embed_color = {
+            "high": discord.Color.red(),
+            "medium": discord.Color.gold(),
+            "low": discord.Color.green()
+        }.get(self.priority_select.values[0], discord.Color.blurple())
 
-@tree.command(name="help", description="Show all commands")
-async def help_command(interaction: Interaction):
-    embed = Embed(title="🛠️ SARVAX Bot Commands", color=0x00bfff)
-    embed.add_field(name="/workticket", value="Raise a new work ticket.", inline=False)
-    embed.add_field(name="/workreport", value="Show your work hours report.", inline=False)
-    embed.add_field(name="/help", value="Show this help message.", inline=False)
+        embed = discord.Embed(title=f"Ticket: {self.title}", description=self.description, color=embed_color)
+        embed.add_field(name="Deadline", value=self.deadline, inline=False)
+        embed.add_field(name="Priority", value=self.priority_select.values[0].capitalize())
+        embed.add_field(name="Tags", value=self.tag_input.value or "None")
+        embed.add_field(name="Assignees", value=", ".join(u.mention for u in self.assignee_select.values))
+        embed.set_footer(text=f"Created by {self.creator.display_name}")
+
+        await interaction.response.send_message(embed=embed)
+
+        for user in self.assignee_select.values:
+            try:
+                await user.send(f"You have been assigned a new task:", embed=embed)
+            except:
+                pass
+
+        log_channel = interaction.guild.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(f"New ticket created by {self.creator.mention}", embed=embed)
+
+        try:
+            dt = datetime.datetime.strptime(self.deadline, "%Y-%m-%d %H:%M")
+            seconds_until_deadline = (dt - datetime.datetime.now()).total_seconds()
+            if seconds_until_deadline > 0:
+                asyncio.create_task(self.send_reminder_later(self.assignee_select.values, embed, seconds_until_deadline))
+        except:
+            pass
+
+    async def send_reminder_later(self, users, embed, seconds):
+        await asyncio.sleep(seconds - 3600)  # 1 hour before
+        for u in users:
+            try:
+                await u.send("Reminder: Your task is due in 1 hour!", embed=embed)
+            except:
+                pass
+
+class TicketBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix="!", intents=intents)
+        self.tree = app_commands.CommandTree(self)
+
+    async def on_ready(self):
+        print(f"Logged in as {self.user}")
+        await self.tree.sync(guild=discord.Object(id=GUILD_ID))
+
+bot = TicketBot()
+
+@bot.tree.command(name="createticket", description="🔧 Create a new work ticket")
+async def create_ticket(interaction: discord.Interaction):
+    await interaction.response.send_modal(TicketModal())
+
+@bot.tree.command(name="help", description="❓ Show available bot commands")
+async def help_cmd(interaction: discord.Interaction):
+    embed = discord.Embed(title="❓ Bot Help Menu", color=discord.Color.blue())
+    embed.add_field(name="/createticket", value="Create a work ticket", inline=False)
+    embed.add_field(name="/stats", value="Show your work stats", inline=False)
+    embed.add_field(name="/help", value="Show this help menu", inline=False)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.event
-async def on_voice_state_update(member, before, after):
-    if before.channel is None and after.channel is not None:
-        voice_start_times[member.id] = datetime.now()
-    elif before.channel is not None and after.channel is None:
-        start_time = voice_start_times.pop(member.id, None)
-        if start_time:
-            with conn:
-                conn.execute("INSERT INTO work_sessions (user_id, start_time, end_time) VALUES (?, ?, ?)",
-                             (member.id, start_time.isoformat(), datetime.now().isoformat()))
+@bot.tree.command(name="stats", description="📊 View work statistics")
+async def stats(interaction: discord.Interaction):
+    # Fake stats placeholder
+    embed = discord.Embed(title="📊 Your Work Stats", color=discord.Color.purple())
+    embed.add_field(name="Completed Tasks", value="12", inline=True)
+    embed.add_field(name="Pending Tasks", value="4", inline=True)
+    embed.add_field(name="Avg. Completion Time", value="6h 30m", inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+bot.run(TOKEN)
