@@ -1,5 +1,6 @@
 discord.py
 pytz
+<<<<<<< HEAD
 
 
 
@@ -9,3 +10,5 @@ python-dotenv>=1.0.0
 aiohttp>=3.9.0
 pillow>=10.0.0
 pytesseract>=0.3.10
+=======
+>>>>>>> 746d467c540dc53aaf7d0fce107022ee69a5a1d6
