@@ -1,70 +1,47 @@
 import discord
-from discord.ext import commands
-from discord import app_commands
-import os
 import openai
+import os
 from dotenv import load_dotenv
-from datetime import datetime
 
-# Load environment variables
 load_dotenv()
+
+# Load API keys
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# Configure OpenAI
 openai.api_key = OPENAI_API_KEY
 
-# Bot Setup
-class NexusAI(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        super().__init__(
-            command_prefix="!",
-            intents=intents,
-            help_command=None
-        )
+# Discord bot setup
+intents = discord.Intents.default()
+intents.message_content = True
+client = discord.Client(intents=intents)
 
-    async def setup_hook(self):
-        await self.tree.sync()
-        print("✅ Slash commands synced!")
-
-bot = NexusAI()
-
-# Event: on_ready
-@bot.event
+@client.event
 async def on_ready():
-    print(f"✨ Logged in as {bot.user} (ID: {bot.user.id})")
+    print(f'✅ Logged in as {client.user}')
 
-# Slash Command: /ask
-@bot.tree.command(name="ask", description="Ask OpenAI a question")
-@app_commands.describe(prompt="What do you want to ask?")
-async def ask(interaction: discord.Interaction, prompt: str):
-    await interaction.response.defer()
+@client.event
+async def on_message(message):
+    if message.author.bot:
+        return
 
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500
-        )
-        answer = response.choices[0].message.content.strip()
+    if message.content.startswith("!ask"):
+        prompt = message.content[len("!ask "):]
 
-        embed = discord.Embed(
-            title="🧠 NexusAI Response",
-            description=answer,
-            color=discord.Color.blurple(),
-            timestamp=datetime.now()
-        )
-        embed.set_footer(text=f"Asked by {interaction.user.display_name}")
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",  # or gpt-4 if you have access
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            reply = response.choices[0].message.content
+            await message.channel.send(reply)
 
-        await interaction.followup.send(embed=embed)
+        except Exception as e:
+            await message.channel.send("❌ Error occurred while generating response.")
+            print(e)
 
-    except Exception as e:
-        await interaction.followup.send(
-            f"❌ Error: {str(e)}",
-            ephemeral=True
-        )
-
-# Run Bot
-if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+client.run(DISCORD_TOKEN)
