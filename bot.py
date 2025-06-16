@@ -1,44 +1,35 @@
+import os
 import discord
 from discord.ext import commands
 from openai import OpenAI
-import os
 
-# Get API keys from environment variables
-DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+# Load API key from environment
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+if not OPENAI_API_KEY:
+    raise ValueError("❌ OPENAI_API_KEY is not set. Please add it to Railway.")
+
+# Setup OpenAI Client
+client_ai = OpenAI(api_key=OPENAI_API_KEY)
+
+# Discord Bot Setup
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Set up OpenAI client (new SDK style)
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 @bot.event
 async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"🔧 Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"❌ Sync failed: {e}")
+    print(f"🤖 Logged in as {bot.user}")
 
-# Slash command: /ask
-@bot.tree.command(name="ask", description="Ask a question to AI")
-async def ask(interaction: discord.Interaction, question: str):
-    await interaction.response.defer()  # Show thinking status
-
+@bot.command(name="ask")
+async def ask(ctx, *, prompt):
     try:
-        response = client.chat.completions.create(
+        response = client_ai.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question}
-            ]
+            messages=[{"role": "user", "content": prompt}]
         )
-        reply = response.choices[0].message.content
-        await interaction.followup.send(reply)
+        await ctx.send(response.choices[0].message.content)
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {str(e)}")
+        await ctx.send(f"❌ Error: {e}")
 
 # Start the bot
-bot.run(DISCORD_TOKEN)
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
