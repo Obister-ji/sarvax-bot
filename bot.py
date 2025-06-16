@@ -1,38 +1,44 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
-import openai
+from openai import OpenAI
 import os
+
+# Get API keys from environment variables
+DISCORD_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
 
-# Set your OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Set up OpenAI client (new SDK style)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 @bot.event
 async def on_ready():
-    print(f'✅ Logged in as {bot.user} (ID: {bot.user.id})')
+    print(f"✅ Logged in as {bot.user}")
     try:
-        synced = await tree.sync()
-        print(f'🔁 Synced {len(synced)} command(s).')
+        synced = await bot.tree.sync()
+        print(f"🔧 Synced {len(synced)} command(s)")
     except Exception as e:
-        print(f'❌ Sync failed: {e}')
+        print(f"❌ Sync failed: {e}")
 
-@tree.command(name="ask", description="Ask the AI a question")
-@app_commands.describe(prompt="What do you want to ask?")
-async def ask(interaction: discord.Interaction, prompt: str):
-    await interaction.response.defer()  # 👈 tells Discord you need more time
+# Slash command: /ask
+@bot.tree.command(name="ask", description="Ask a question to AI")
+async def ask(interaction: discord.Interaction, question: str):
+    await interaction.response.defer()  # Show thinking status
+
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # or gpt-4 if you have access
-            messages=[{"role": "user", "content": prompt}]
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question}
+            ]
         )
         reply = response.choices[0].message.content
-        await interaction.followup.send(reply)  # 👈 follow-up with real response
+        await interaction.followup.send(reply)
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {e}")
+        await interaction.followup.send(f"❌ Error: {str(e)}")
 
-# Run the bot with your token
-bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+# Start the bot
+bot.run(DISCORD_TOKEN)
