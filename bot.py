@@ -16,24 +16,24 @@ load_dotenv()
 # Initialize Gemini with correct model names
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    
+
     # Get the correct model names dynamically
     models = [m.name for m in genai.list_models()]
-    
+
     # Use the first available text model
-    text_model_name = next((m for m in models if 'model' in m and 'text' in m.lower()), None)
+    text_model_name = next((m for m in models if 'text' in m.lower()), None)
     if not text_model_name:
         raise ValueError("No text generation model found")
-    
+
     # Use the first available vision model
-    vision_model_name = next((m for m in models if 'model' in m and 'vision' in m.lower()), None)
-    
+    vision_model_name = next((m for m in models if 'vision' in m.lower()), None)
+
     text_model = genai.GenerativeModel(text_model_name)
     vision_model = genai.GenerativeModel(vision_model_name) if vision_model_name else None
-    
+
     print(f"Using text model: {text_model_name}")
     print(f"Using vision model: {vision_model_name or 'None'}")
-    
+
 except Exception as e:
     print(f"Failed to initialize Gemini: {e}")
     exit(1)
@@ -50,8 +50,9 @@ class PersistentAIView(ui.View):
     )
     async def more_details(self, interaction: discord.Interaction, button: ui.Button):
         try:
+            description = interaction.message.embeds[0].description if interaction.message.embeds else ""
             follow_up = text_model.generate_content(
-                f"Expand on this in 3 bullet points: {interaction.message.embeds[0].description}"
+                f"Expand on this in 3 bullet points: {description}"
             )
             embed = discord.Embed(
                 title="🔍 Detailed Breakdown",
@@ -95,12 +96,12 @@ bot = NexusAI()
 @app_commands.describe(question="Your question for the AI")
 async def ask(interaction: discord.Interaction, question: str):
     await interaction.response.defer()
-    
+
     try:
         response = text_model.generate_content(
             f"Respond concisely but helpfully to a Discord user: {question}"
         )
-        
+
         embed = discord.Embed(
             title=f"🧠 NexusAI Response",
             description=response.text,
@@ -108,9 +109,9 @@ async def ask(interaction: discord.Interaction, question: str):
             timestamp=datetime.now()
         )
         embed.set_footer(text=f"Requested by {interaction.user.display_name}")
-        
+
         await interaction.followup.send(embed=embed, view=PersistentAIView())
-        
+
     except Exception as e:
         error_embed = discord.Embed(
             title="❌ Error",
@@ -121,49 +122,7 @@ async def ask(interaction: discord.Interaction, question: str):
 
 @bot.tree.command(name="analyze", description="Analyze an image")
 async def analyze(interaction: discord.Interaction):
-    if not interaction.message.attachments:
-        return await interaction.response.send_message("Please attach an image!", ephemeral=True)
-    
-    if not vision_model:
-        return await interaction.response.send_message("Image analysis is not available", ephemeral=True)
-    
-    await interaction.response.defer()
-    attachment = interaction.message.attachments[0]
-    
-    try:
-        if not attachment.content_type.startswith('image/'):
-            return await interaction.followup.send("Only images are supported for analysis", ephemeral=True)
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.get(attachment.url) as resp:
-                if resp.status != 200:
-                    return await interaction.followup.send("Failed to download image", ephemeral=True)
-                
-                image_data = await resp.read()
-                image_part = {
-                    "mime_type": attachment.content_type,
-                    "data": image_data
-                }
-                
-                response = vision_model.generate_content(
-                    ["Analyze this image in detail for a Discord user. Describe:", image_part]
-                )
-                
-                embed = discord.Embed(
-                    title="🖼️ Image Analysis",
-                    description=response.text,
-                    color=0x00ffff
-                )
-                embed.set_thumbnail(url=attachment.url)
-                await interaction.followup.send(embed=embed)
-                
-    except Exception as e:
-        error_embed = discord.Embed(
-            title="❌ Analysis Failed",
-            description=f"```{str(e)}```",
-            color=0xff0000
-        )
-        await interaction.followup.send(embed=error_embed)
+    await interaction.response.send_message("Please use this command by replying to a message with an image attachment.", ephemeral=True)
 
 # Bot Events
 @bot.event
