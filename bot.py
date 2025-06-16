@@ -1,51 +1,70 @@
 import discord
-import openai
+from discord.ext import commands
+from discord import app_commands
 import os
+import openai
+from dotenv import load_dotenv
+from datetime import datetime
 
-# 🔐 Load your keys
-DISCORD_BOT_TOKEN = 'YOUR_DISCORD_BOT_TOKEN'
-OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY'
+# Load environment variables
+load_dotenv()
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 openai.api_key = OPENAI_API_KEY
 
-intents = discord.Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
+# Bot Setup
+class NexusAI(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            help_command=None
+        )
 
-# 🤖 OpenAI Model Configuration
-MODEL_NAME = "gpt-4o"  # or "gpt-3.5-turbo" if you prefer
+    async def setup_hook(self):
+        await self.tree.sync()
+        print("✅ Slash commands synced!")
 
-@client.event
+bot = NexusAI()
+
+# Event: on_ready
+@bot.event
 async def on_ready():
-    print(f"✅ Logged in as {client.user}")
+    print(f"✨ Logged in as {bot.user} (ID: {bot.user.id})")
 
-@client.event
-async def on_message(message):
-    if message.author.bot:
-        return
+# Slash Command: /ask
+@bot.tree.command(name="ask", description="Ask OpenAI a question")
+@app_commands.describe(prompt="What do you want to ask?")
+async def ask(interaction: discord.Interaction, prompt: str):
+    await interaction.response.defer()
 
-    # 🔹 Trigger command (customize as needed)
-    if message.content.startswith("!ask "):
-        prompt = message.content[5:].strip()
-        if not prompt:
-            await message.channel.send("❓ Please provide a prompt.")
-            return
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500
+        )
+        answer = response.choices[0].message.content.strip()
 
-        await message.channel.send("🤖 Thinking...")
+        embed = discord.Embed(
+            title="🧠 NexusAI Response",
+            description=answer,
+            color=discord.Color.blurple(),
+            timestamp=datetime.now()
+        )
+        embed.set_footer(text=f"Asked by {interaction.user.display_name}")
 
-        try:
-            # 🧠 Call OpenAI
-            response = openai.ChatCompletion.create(
-                model=MODEL_NAME,
-                messages=[
-                    {"role": "system", "content": "You are a helpful and witty assistant."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            reply = response.choices[0].message.content
-            await message.channel.send(reply)
+        await interaction.followup.send(embed=embed)
 
-        except openai.error.OpenAIError as e:
-            await message.channel.send(f"❌ OpenAI Error: {str(e)}")
+    except Exception as e:
+        await interaction.followup.send(
+            f"❌ Error: {str(e)}",
+            ephemeral=True
+        )
 
-client.run(DISCORD_BOT_TOKEN)
+# Run Bot
+if __name__ == "__main__":
+    bot.run(DISCORD_TOKEN)
