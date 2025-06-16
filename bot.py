@@ -18,6 +18,36 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 text_model = genai.GenerativeModel('gemini-pro')
 vision_model = genai.GenerativeModel('gemini-pro-vision')
 
+# Persistent View Class
+class PersistentAIView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)  # Required for persistence
+
+    @ui.button(
+        label="🔍 More Details",
+        style=discord.ButtonStyle.blurple,
+        custom_id="persistent:more_details"  # Required for persistence
+    )
+    async def more_details(self, interaction: discord.Interaction, button: ui.Button):
+        follow_up = text_model.generate_content(
+            f"Expand on this in 3 bullet points: {interaction.message.embeds[0].description}"
+        )
+        embed = discord.Embed(
+            title="🔍 Detailed Breakdown",
+            description=follow_up.text,
+            color=0x00ff00
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @ui.button(
+        label="🗑️ Delete",
+        style=discord.ButtonStyle.red,
+        custom_id="persistent:delete"  # Required for persistence
+    )
+    async def delete(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.message.delete()
+        await interaction.response.send_message("Message deleted.", ephemeral=True)
+
 # Bot setup
 class NexusAI(commands.Bot):
     def __init__(self):
@@ -31,32 +61,12 @@ class NexusAI(commands.Bot):
                 name="your commands 👀"
             )
         )
-        self.persistent_views_added = False
+
+    async def setup_hook(self):
+        # Register persistent views
+        self.add_view(PersistentAIView())
 
 bot = NexusAI()
-
-# Custom UI Components
-class AIResponseView(ui.View):
-    def __init__(self, query, response):
-        super().__init__(timeout=120)
-        self.query = query
-        self.response = response
-
-    @ui.button(label="🔍 More Details", style=discord.ButtonStyle.blurple)
-    async def more_details(self, interaction: discord.Interaction, button: ui.Button):
-        follow_up = text_model.generate_content(
-            f"Expand on this in 3 bullet points: {self.response.text}"
-        )
-        embed = discord.Embed(
-            title="🔍 Detailed Breakdown",
-            description=follow_up.text,
-            color=0x00ff00
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @ui.button(label="🗑️ Delete", style=discord.ButtonStyle.red)
-    async def delete(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.message.delete()
 
 # Core Commands
 @bot.tree.command(name="ask", description="Ask NexusAI anything")
@@ -78,7 +88,7 @@ async def ask(interaction: discord.Interaction, question: str):
         )
         embed.set_footer(text=f"Requested by {interaction.user.display_name}")
         
-        view = AIResponseView(question, response)
+        view = PersistentAIView()
         await interaction.followup.send(embed=embed, view=view)
         
     except Exception as e:
@@ -146,35 +156,9 @@ async def analyze(interaction: discord.Interaction):
         )
         await interaction.followup.send(embed=error_embed)
 
-# Premium Features
-class PremiumModal(ui.Modal, title="🔒 Premium Chat"):
-    message = ui.TextInput(label="Your private message to NexusAI")
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        response = text_model.generate_content(
-            f"Respond to this private user message: {self.message.value}"
-        )
-        
-        embed = discord.Embed(
-            title="🔒 Premium AI Response",
-            description=response.text,
-            color=0xffd700
-        )
-        await interaction.followup.send(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="private", description="Start a premium private chat")
-async def private_chat(interaction: discord.Interaction):
-    """Exclusive 1-on-1 AI chat"""
-    await interaction.response.send_modal(PremiumModal())
-
 # Bot Events
 @bot.event
 async def on_ready():
-    if not bot.persistent_views_added:
-        bot.add_view(AIResponseView("", ""))  # Persistent view
-        bot.persistent_views_added = True
-    
     await bot.tree.sync()
     print(f"✨ {bot.user} is ready with premium features!")
 
