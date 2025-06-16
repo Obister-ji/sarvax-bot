@@ -1,0 +1,121 @@
+🧠 BOT DEVELOPMENT PROMPT FOR SARVAX PVT LTD (OBIZ BOT)
+You are building a premium multifunctional Discord bot for SARVAX Pvt Ltd named Obiz Bot. It combines AI assistance, gamification, moderation, and productivity features, offering a seamless and professional server experience.
+
+🛠️ CORE FEATURES TO IMPLEMENT
+1. 🤖 Obiz AI (AI Assistant using Obiz Coin)
+Name: Obiz AI
+
+Function: Generates text responses (powered by AI).
+
+Usage Cost: Each request deducts 10–15 Obiz Coins.
+
+Access: Can be invoked in:
+
+A temporary thread (auto-deletes in 30 mins).
+
+DM channel.
+
+Command: /askai <question> (with coin balance check).
+
+Optional: Enable quoting previous message for reference.
+
+2. 🌅 AI-Based Auto Greetings
+Feature: Automatically wishes users:
+
+Good Morning (7 AM–10 AM)
+
+Good Evening (5 PM–8 PM)
+
+Good Night (10 PM–12 AM)
+
+Uses user timezone if possible, else server default.
+
+Can include rotating motivational quotes or Obiz tips.
+
+3. 🔧 Moderator & Admin Panel
+Feature: Moderator-only command panel.
+
+Key Features:
+
+Ban/Kick/Timeout system for spammers.
+
+Role-Based Access to mod tools.
+
+Commands like /ban @user <reason>, /timeout @user 10m, etc.
+
+Logs actions in a secure admin log channel.
+
+4. 🔐 Security & Admin Tools
+Role-Based Ticket Permissions: Only users with allowed roles can open tickets.
+
+Audit Logs:
+
+Track deleted or edited tickets and who performed the action.
+
+Channel: #ticket-logs.
+
+5. 🎮 Fun & Engagement Features
+Mini Games:
+
+/trivia, /wordle, /blackjack, /coinflip.
+
+Virtual Pet System:
+
+/adoptpet, /feedpet, /petstatus
+
+Pets earn Obiz Coins for feeding/leveling up.
+
+6. 📁 Ticket Auto-Management
+Automatically closes tickets that are:
+
+Inactive or untouched for 7+ days.
+
+Sends a 24-hr closing warning first.
+
+7. 💰 Economy & Gamification System
+Monthly Salary System:
+
+Users earn Obiz Coins based on activity:
+
+Messages sent
+
+Tickets resolved
+
+Time spent in VC
+
+Command: /salary claim
+
+Stock Market Simulation:
+
+/invest in fictional stocks.
+
+Daily/weekly price fluctuation system.
+
+Loan System:
+
+/loan <amount> with repayment deadline and interest.
+
+Tracks loan history, defaults, and repayments.
+
+8. 🏆 Achievements & Items
+Milestone Badges:
+
+Examples: “100 Tickets Completed”, “Top Contributor”, “1 Year Club”.
+
+Shown on /profile.
+
+Rare Items & Auctions:
+
+Items purchasable via /shop.
+
+/auction start <item> allows community to bid.
+
+Items give buffs (e.g., coin multiplier, pet XP boost).
+
+💎 User Interface
+Use Discord’s new Premium UI elements (Buttons, Dropdowns, Modals).
+
+Integrate GIFs and Stickers to enhance user experience.
+
+Ensure mobile-friendly design.
+
