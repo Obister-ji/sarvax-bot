@@ -16,8 +16,24 @@ load_dotenv()
 # Initialize Gemini with correct model names
 try:
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    text_model = genai.GenerativeModel('gemini-1.0-pro')
-    vision_model = genai.GenerativeModel('gemini-1.0-pro-vision')
+    
+    # Get the correct model names dynamically
+    models = [m.name for m in genai.list_models()]
+    
+    # Use the first available text model
+    text_model_name = next((m for m in models if 'model' in m and 'text' in m.lower()), None)
+    if not text_model_name:
+        raise ValueError("No text generation model found")
+    
+    # Use the first available vision model
+    vision_model_name = next((m for m in models if 'model' in m and 'vision' in m.lower()), None)
+    
+    text_model = genai.GenerativeModel(text_model_name)
+    vision_model = genai.GenerativeModel(vision_model_name) if vision_model_name else None
+    
+    print(f"Using text model: {text_model_name}")
+    print(f"Using vision model: {vision_model_name or 'None'}")
+    
 except Exception as e:
     print(f"Failed to initialize Gemini: {e}")
     exit(1)
@@ -108,6 +124,9 @@ async def analyze(interaction: discord.Interaction):
     if not interaction.message.attachments:
         return await interaction.response.send_message("Please attach an image!", ephemeral=True)
     
+    if not vision_model:
+        return await interaction.response.send_message("Image analysis is not available", ephemeral=True)
+    
     await interaction.response.defer()
     attachment = interaction.message.attachments[0]
     
@@ -145,47 +164,6 @@ async def analyze(interaction: discord.Interaction):
             color=0xff0000
         )
         await interaction.followup.send(embed=error_embed)
-
-@bot.tree.command(name="doc", description="Summarize a document")
-async def summarize_doc(interaction: discord.Interaction):
-    if not interaction.message.attachments:
-        return await interaction.response.send_message("Please attach a document!", ephemeral=True)
-    
-    await interaction.response.defer()
-    attachment = interaction.message.attachments[0]
-    
-    try:
-        if attachment.filename.endswith('.pdf'):
-            text = extract_text_from_pdf(await attachment.read())
-        elif attachment.filename.endswith(('.png', '.jpg', '.jpeg')):
-            text = pytesseract.image_to_string(Image.open(BytesIO(await attachment.read())))
-        else:
-            text = (await attachment.read()).decode('utf-8')
-            
-        summary = text_model.generate_content(
-            f"Summarize this document in 3 key points:\n\n{text[:10000]}"
-        )
-        
-        embed = discord.Embed(
-            title="📄 Document Summary",
-            description=summary.text,
-            color=0x7289da
-        )
-        await interaction.followup.send(embed=embed)
-        
-    except Exception as e:
-        error_embed = discord.Embed(
-            title="❌ Processing Failed",
-            description=f"```{str(e)}```",
-            color=0xff0000
-        )
-        await interaction.followup.send(embed=error_embed)
-
-# Helper functions
-def extract_text_from_pdf(pdf_data):
-    from PyPDF2 import PdfReader
-    reader = PdfReader(BytesIO(pdf_data))
-    return "\n".join([page.extract_text() for page in reader.pages])
 
 # Bot Events
 @bot.event
