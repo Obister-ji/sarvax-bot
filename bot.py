@@ -35,7 +35,8 @@ async def ask(interaction: discord.Interaction, prompt: str):
     await interaction.response.defer(thinking=True)
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-3.5-turbo"
+
             messages=[{"role": "user", "content": prompt}]
         )
         reply = response.choices[0].message.content
