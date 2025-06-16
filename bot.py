@@ -1,48 +1,39 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import openai
 import os
-from dotenv import load_dotenv
 
-# Load .env variables
-load_dotenv()
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Set up your OpenAI API key here
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Store this as an environment variable for safety
 
-# Configure OpenAI
-openai.api_key = OPENAI_API_KEY
-
-# Set up Discord bot
+# Intents and Bot Setup
 intents = discord.Intents.default()
+intents.messages = True
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 
-# Event: on_ready
+# Event: Bot is Ready
 @bot.event
 async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"✅ Synced {len(synced)} commands.")
-    except Exception as e:
-        print(f"❌ Failed to sync commands: {e}")
-    print(f"✅ Bot is online as {bot.user}")
+    print(f"✅ Logged in as {bot.user}")
 
-# Slash command: /ask
-@bot.tree.command(name="ask", description="Ask OpenAI a question")
-@app_commands.describe(prompt="Your question to the AI")
-async def ask(interaction: discord.Interaction, prompt: str):
-    await interaction.response.defer(thinking=True)
+# Command: AI Chat using OpenAI GPT-3.5
+@bot.command()
+async def ask(ctx, *, question):
+    await ctx.send("🤖 Thinking...")
     try:
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo"
-
-            messages=[{"role": "user", "content": prompt}]
+        client = openai.OpenAI(api_key=openai.api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": question}
+            ]
         )
-        reply = response.choices[0].message.content
-        await interaction.followup.send(f"💬 **AI says:**\n{reply}")
+        answer = response.choices[0].message.content
+        await ctx.send(answer)
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {str(e)}")
+        await ctx.send(f"❌ Error: {str(e)}")
 
-# Run bot
-bot.run(DISCORD_TOKEN)
+# Run the bot with your token
+bot.run(os.getenv("DISCORD_BOT_TOKEN"))
